@@ -71,9 +71,18 @@ private:
     QSpinBox *spinSendPeriod;//发送周期
     QCheckBox *ckbAutoSend;//自动发送
 
-    QMenu *menu;
+    QMenu *fileMenu;//文件
+    QMenu *editMenu;//编辑
+    QMenu *viewMenu;//视图
+    QMenu *toolMenu;//工具
+    QMenu *helpMenu;//帮助
     QMenuBar *menuBar;
     QToolBar *toolBar;
+
+    QAction *exitAction;//退出
+    QAction *logAction;//日志
+    QAction *openDirAction;//打开文件夹
+
     QAction *addAction;
     QAction *reduceAction;
     QAction *startAction;

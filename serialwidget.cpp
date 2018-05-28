@@ -197,15 +197,20 @@ void SerialWidget::initConnections()
 
 void SerialWidget::initMenu()
 {
-    menu = new QMenu(tr("文件"),this);
-    startAction = menu->addAction(QIcon(":/images/start.png"),tr("开始"));
-    addAction = menu->addAction(QIcon(":/images/add.png"),tr("增加"));
-    reduceAction = menu->addAction(QIcon(":/images/reduce.png"),tr("减少"));
-    stopAction = menu->addAction(QIcon(":/images/stop.png"),tr("停止"));
-    pauseAction = menu->addAction(QIcon(":/images/pause.png"),tr("暂停"));
-    exitAction = menu->addAction(QIcon(":/images/exit.png"),tr("退出"));
+    fileMenu = new QMenu(tr("文件(&F)"),this);
+    editMenu = new QMenu(tr("编辑(&E)"),this);
+    viewMenu = new QMenu(tr("视图(&V)"),this);
+    toolMenu = new QMenu(tr("工具(&T)"),this);
+    helpMenu = new QMenu(tr("帮助(&H)"),this);
+
+    startAction = fileMenu->addAction(QIcon(":/images/start.png"),tr("开始"));
+    addAction = fileMenu->addAction(QIcon(":/images/add.png"),tr("增加"));
+    reduceAction = fileMenu->addAction(QIcon(":/images/reduce.png"),tr("减少"));
+    stopAction = fileMenu->addAction(QIcon(":/images/stop.png"),tr("停止"));
+    pauseAction = fileMenu->addAction(QIcon(":/images/pause.png"),tr("暂停"));
+    exitAction = fileMenu->addAction(QIcon(":/images/exit.png"),tr("退出"));
     menuBar = new QMenuBar(this);
-    menuBar->addMenu(menu);
+    menuBar->addMenu(fileMenu);
     toolBar = new QToolBar(this);
     toolBar->addAction(startAction);
     toolBar->addAction(reduceAction);
