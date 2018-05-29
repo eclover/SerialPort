@@ -3,9 +3,12 @@
         <file>images/add.png</file>
         <file>images/exit.png</file>
         <file>images/next.png</file>
-        <file>images/pause.png</file>
         <file>images/previous.png</file>
         <file>images/reduce.png</file>
+        <file>images/log.png</file>
+        <file>images/clear.png</file>
+        <file>images/pause.png</file>
+        <file>images/set.png</file>
         <file>images/start.png</file>
         <file>images/stop.png</file>
     </qresource>

@@ -14,6 +14,9 @@ class QLineEdit;
 class QRadioButton;
 class QSpinBox;
 class QStatusBar;
+class QActionGroup;
+class QPlainTextEdit;
+class QTimer;
 
 class SerialWidget : public QMainWindow
 {
@@ -42,6 +45,7 @@ private:
     QComboBox *comboDataBits;//数据位
     QComboBox *comboStopBits;//停止位
     QComboBox *comboFlowControl;//流控
+    QComboBox *comboTxt;//文本记录
     QGroupBox *groupComSet;
     QGroupBox *groupSendSet;
     QGroupBox *groupStatus;
@@ -54,10 +58,8 @@ private:
     QPushButton *btnSend;//发送
     QPushButton *btnClearSend;//清空发送
 
-    QTextEdit *txtRecv;//接收区
+    QPlainTextEdit *txtRecv;//接收区
     QTextEdit *txtSend;//发送区
-    QCheckBox *ckbHexRecv;//十六进制接收
-    QCheckBox *ckbHexSend;//十六进制发送
     QCheckBox *ckbAutoClear;//自动清空
     QCheckBox *ckbAutoNewLine;//自动换行
     QCheckBox *ckbShowSend;//显示发送
@@ -90,14 +92,17 @@ private:
     QAction *stopAction;
     QAction *clearAction;
     QAction *setAction;
-    QAction *exitAction;
 
+    QActionGroup *operateActions;
+    QTimer *timer;
+    bool curPortStatus;
 
 protected:
     void initWidgets();
     void initPortSet();
     void initConnections();
     void initMenu();
+
     QSerialPort::Parity getSerialParity(int index);
     QSerialPort::StopBits getSerialStopBits(int index);
     QSerialPort::DataBits getSerialDataBits(int index);
@@ -111,10 +116,14 @@ signals:
 
 public slots:
     void openPort();
+    void closePort();
     void readData();
     void sendData();
     void clearReadTxt();
     void clearSendTxt();
+    void pauseStatus();
+    void updateOperateStatus(QAction* action);
+    void changePortNo(int index);
 };
 
 #endif // SERIALWIDGET_H

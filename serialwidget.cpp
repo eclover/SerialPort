@@ -21,11 +21,17 @@
 #include <QAction>
 #include <QMenuBar>
 #include <QToolBar>
+#include <QActionGroup>
+#include <QPlainTextEdit>
+#include <QTimer>
 
 
 SerialWidget::SerialWidget(QWidget *parent) : QMainWindow(parent)
+  ,curPortStatus(false)
 {
     serial = new QSerialPort;
+    timer = new QTimer(this);
+    timer->setInterval(1000);
     initMenu();
     initWidgets();
     initPortSet();
@@ -54,6 +60,7 @@ void SerialWidget::initWidgets()
     comboDataBits = new QComboBox;
     comboStopBits = new QComboBox;
     comboFlowControl = new QComboBox;
+    comboTxt = new QComboBox;
 
     labelPortStatus = new QLabel(tr("关闭"));
     btnOpen = new QPushButton(tr("打开"));
@@ -69,8 +76,6 @@ void SerialWidget::initWidgets()
     btnSend = new QPushButton(tr("发送"));
     btnClearRecv = new QPushButton(tr("清空接收"));
     btnClearSend = new QPushButton(tr("清空发送"));
-    ckbHexRecv = new QCheckBox(tr("十六进制显示"));
-    ckbHexSend = new QCheckBox(tr("十六进制发送"));
     ckbAutoClear = new QCheckBox(tr("自动清空"));
     ckbAutoNewLine = new QCheckBox(tr("自动换行"));
     ckbShowSend = new QCheckBox(tr("显示发送"));
@@ -121,7 +126,7 @@ void SerialWidget::initWidgets()
     leftLayout->addWidget(groupRecvSet);
     leftLayout->addWidget(groupSendSet);
 
-    txtRecv = new QTextEdit;
+    txtRecv = new QPlainTextEdit;
     txtSend = new QTextEdit;
 
     centerLayout->addWidget(txtRecv);
@@ -130,11 +135,14 @@ void SerialWidget::initWidgets()
     layout1->addWidget(btnOpen);
     //centerLayout->addWidget(txtSend);
     centerLayout->addLayout(layout1);
+    centerLayout->addWidget(comboTxt);
     centerLayout->setStretch(0,3);
     centerLayout->setStretch(1,1);
 
     mainLayout->addLayout(leftLayout);
     mainLayout->addLayout(centerLayout);
+    mainLayout->setStretch(0,1);
+    mainLayout->setStretch(1,3);
     centerWidget->setLayout(mainLayout);
     setCentralWidget(centerWidget);
     statusBar = new QStatusBar(this);
@@ -155,10 +163,14 @@ void SerialWidget::initPortSet()
         }
     }
     //设置波特率
-    QStringList listBaudRate ;
-    listBaudRate <<"1200"<<"2400"<<"4800"<<"9600"<<"19200"<<"38400"<<"115200"<<"Custom";
-    comboBaudRate->addItems(listBaudRate);
-    comboBaudRate->setCurrentIndex(3);
+    foreach(auto const &baudRate,QSerialPortInfo::standardBaudRates()){
+        comboBaudRate->addItem(QString::number(baudRate));
+    }
+    comboBaudRate->setCurrentText(tr("9600"));
+//    QStringList listBaudRate ;
+//    listBaudRate <<"1200"<<"2400"<<"4800"<<"9600"<<"19200"<<"38400"<<"115200"<<"Custom";
+//    comboBaudRate->addItems(listBaudRate);
+//    comboBaudRate->setCurrentIndex(3);
 
     //设置数据位
     QStringList listDataBits;
@@ -193,6 +205,32 @@ void SerialWidget::initConnections()
     connect(btnSend,&QPushButton::clicked,this,&SerialWidget::sendData);
     connect(btnClearRecv,&QPushButton::clicked,this,&SerialWidget::clearReadTxt);
     connect(btnClearSend,&QPushButton::clicked,this,&SerialWidget::clearSendTxt);
+
+    connect(exitAction,&QAction::triggered,this,&QWidget::close);
+    connect(startAction,&QAction::triggered,this,&SerialWidget::openPort);
+    connect(clearAction,&QAction::triggered,this,&SerialWidget::clearReadTxt);
+    connect(pauseAction,&QAction::triggered,this,&SerialWidget::pauseStatus);
+    connect(operateActions,&QActionGroup::triggered,this,&SerialWidget::updateOperateStatus);
+    connect(stopAction,&QAction::triggered,this,&SerialWidget::closePort);
+
+    connect(comboPortNo, QOverload<int>::of(&QComboBox::currentIndexChanged),this,&SerialWidget::changePortNo);
+    connect(comboBaudRate,QOverload<int>::of(&QComboBox::currentIndexChanged),this,&SerialWidget::changePortNo);
+    connect(comboDataBits,QOverload<int>::of(&QComboBox::currentIndexChanged),this,&SerialWidget::changePortNo);
+    connect(comboFlowControl,QOverload<int>::of(&QComboBox::currentIndexChanged),this,&SerialWidget::changePortNo);
+    connect(comboStopBits,QOverload<int>::of(&QComboBox::currentIndexChanged),this,&SerialWidget::changePortNo);
+    connect(comboFlowControl,QOverload<int>::of(&QComboBox::currentIndexChanged),this,&SerialWidget::changePortNo);
+    connect(spinSendPeriod,QOverload<int>::of(&QSpinBox::valueChanged),[this]{
+        timer->setInterval(spinSendPeriod->value());
+    });
+    //定时器
+    connect(ckbShowSend, &QCheckBox::toggled, [this](bool checked) {
+        if (checked)
+            timer->start();
+        else
+            timer->stop();
+    });
+
+    connect(timer,&QTimer::timeout,this,&SerialWidget::sendData);
 }
 
 void SerialWidget::initMenu()
@@ -203,22 +241,40 @@ void SerialWidget::initMenu()
     toolMenu = new QMenu(tr("工具(&T)"),this);
     helpMenu = new QMenu(tr("帮助(&H)"),this);
 
-    startAction = fileMenu->addAction(QIcon(":/images/start.png"),tr("开始"));
-    addAction = fileMenu->addAction(QIcon(":/images/add.png"),tr("增加"));
-    reduceAction = fileMenu->addAction(QIcon(":/images/reduce.png"),tr("减少"));
-    stopAction = fileMenu->addAction(QIcon(":/images/stop.png"),tr("停止"));
-    pauseAction = fileMenu->addAction(QIcon(":/images/pause.png"),tr("暂停"));
+
+
+    logAction = fileMenu->addAction(QIcon(":/images/log.png"),tr("记录日志"));
     exitAction = fileMenu->addAction(QIcon(":/images/exit.png"),tr("退出"));
+
+    startAction = editMenu->addAction(QIcon(":/images/start.png"),tr("开始"));
+ //   addAction = editMenu->addAction(QIcon(":/images/add.png"),tr("增加"));
+ //   reduceAction = editMenu->addAction(QIcon(":/images/reduce.png"),tr("减少"));
+    pauseAction = editMenu->addAction(QIcon(":/images/pause.png"),tr("暂停"));
+    stopAction = editMenu->addAction(QIcon(":/images/stop.png"),tr("停止"));
+    clearAction = editMenu->addAction(QIcon(":/images/clear.png"),tr("清除"));
+    setAction = toolMenu->addAction(QIcon(":/images/set.png"),tr("设置"));
+
+    operateActions = new QActionGroup(this);
+    operateActions->addAction(startAction);
+    operateActions->addAction(pauseAction);
+    operateActions->addAction(stopAction);
+    stopAction->setCheckable(true);
+    stopAction->setChecked(true);
+
     menuBar = new QMenuBar(this);
     menuBar->addMenu(fileMenu);
+    menuBar->addMenu(editMenu);
+    menuBar->addMenu(toolMenu);
     toolBar = new QToolBar(this);
-    toolBar->addAction(startAction);
-    toolBar->addAction(reduceAction);
+    toolBar->addAction(logAction);
     toolBar->addSeparator();
-    toolBar->addAction(stopAction);
+    toolBar->addAction(startAction);
     toolBar->addAction(pauseAction);
-    toolBar->addAction(addAction);
-    toolBar->addAction(exitAction);
+    toolBar->addAction(stopAction);
+    toolBar->addAction(clearAction);
+    toolBar->addSeparator();
+    toolBar->addAction(setAction);
+    toolBar->addSeparator();
     setMenuBar(menuBar);
     addToolBar(toolBar);
 }
@@ -330,33 +386,61 @@ void SerialWidget::openPort()
     serial->setDataBits(portSet.dataBits);
     serial->setFlowControl(portSet.flowControl);
 
-    if(btnOpen->text() == tr("打开串口"))
-    {
-        if(serial->open(QIODevice::ReadWrite)){
-            btnOpen->setText(tr("关闭串口"));
-        }
-        else{
-            QMessageBox::warning(this,tr("提示"),tr("串口打开失败!"),QMessageBox::Yes);
+    if(btnOpen->text() == tr("打开")){
+        if(!curPortStatus){
+            if(serial->open(QIODevice::ReadWrite)){
+                btnOpen->setText(tr("发送"));
+                startAction->setCheckable(true);
+                startAction->setChecked(true);
+                curPortStatus = true;
+            }
+            else{
+                QMessageBox::warning(this,tr("提示"),tr("串口打开失败!"),QMessageBox::Yes);
+            }
         }
     }
-    else{
-        serial->close();
-        btnOpen->setText(tr("打开串口"));
+    else if(btnOpen->text() == tr("发送")){
+        sendData();//发送数据
     }
+}
 
+void SerialWidget::closePort()
+{
+     serial->close();
+     curPortStatus = false;
+     btnOpen->setText(tr("打开"));
 
 }
 
 void SerialWidget::readData()
 {
     const QByteArray data = serial->readAll();
-    txtRecv->append(data);
+
+    if(txtRecv->blockCount()>20)
+    {
+        txtRecv->clear();
+    }
+    //十六进制接收
+    if(hexRcv->isChecked()){
+        QString strData = data.toHex();
+        for(int i=0;i<strData.length();i=i+2){
+            txtRecv->insertPlainText(strData.mid(i,2));
+            txtRecv->insertPlainText(tr(" "));
+        }
+        if(ckbAutoNewLine->isChecked()){        //换行
+            txtRecv->insertPlainText(tr("\r\n"));
+        }
+    }
+    else{
+        txtRecv->insertPlainText(data);
+    }
+
 }
 
 //发送数据
 void SerialWidget::sendData()
 {
-    if(!serial->isOpen()){
+    if(!curPortStatus){
         QMessageBox::warning(this,tr("提示"),tr("串口未打开，请先打开串口"),QMessageBox::Yes);
         return;
     }
@@ -381,6 +465,28 @@ void SerialWidget::clearSendTxt()
 {
     this->txtSend->clear();
 }
+
+void SerialWidget::pauseStatus()
+{
+
+}
+
+
+void SerialWidget::updateOperateStatus(QAction *action)
+{
+    action->setCheckable(true);
+    action->setChecked(true);
+}
+
+void SerialWidget::changePortNo(int index)
+{
+    if(curPortStatus){
+        closePort();
+        openPort();
+    }
+}
+
+
 
 //字符串转16进制发送
 QByteArray SerialWidget::hexStringToByteArray(QString hexString)
