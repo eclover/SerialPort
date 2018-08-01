@@ -45,14 +45,13 @@ private:
     QComboBox *comboDataBits;//数据位
     QComboBox *comboStopBits;//停止位
     QComboBox *comboFlowControl;//流控
-    QComboBox *comboTxt;//文本记录
     QGroupBox *groupComSet;
     QGroupBox *groupSendSet;
     QGroupBox *groupStatus;
     QGroupBox *groupRecvSet;
 
     QPushButton *btnOpen;//打开串口
-    QPushButton *btnClearRecv;//清空
+    QPushButton *btnClearRecv;//清空接收区
     QPushButton *btnClose;//关闭
     QPushButton *btnStopShow;//停止显示
     QPushButton *btnSend;//发送
@@ -60,7 +59,7 @@ private:
 
     QPlainTextEdit *txtRecv;//接收区
     QTextEdit *txtSend;//发送区
-    QCheckBox *ckbAutoClear;//自动清空
+    QCheckBox *ckbShowTime;//自动清空
     QCheckBox *ckbAutoNewLine;//自动换行
     QCheckBox *ckbShowSend;//显示发送
 
@@ -97,6 +96,14 @@ private:
     QTimer *timer;
     bool curPortStatus;
 
+    QLabel *comStatus;
+    QLabel *recvStatus;
+    QLabel *sendStatus;
+    QLabel *placeHolderStatus;
+
+    int sendSize;
+    int recvSize;
+
 protected:
     void initWidgets();
     void initPortSet();
@@ -110,7 +117,6 @@ protected:
 
     QByteArray hexStringToByteArray(QString hexString);
     int ConvertHexChar(char ch);
-    QStatusBar *statusBar;
 
 signals:
 

@@ -24,6 +24,8 @@
 #include <QActionGroup>
 #include <QPlainTextEdit>
 #include <QTimer>
+#include <QTime>
+#include <QDateTime>
 
 
 SerialWidget::SerialWidget(QWidget *parent) : QMainWindow(parent)
@@ -32,6 +34,10 @@ SerialWidget::SerialWidget(QWidget *parent) : QMainWindow(parent)
     serial = new QSerialPort;
     timer = new QTimer(this);
     timer->setInterval(1000);
+    sendSize = 0;
+    recvSize = 0;
+
+
     initMenu();
     initWidgets();
     initPortSet();
@@ -60,7 +66,6 @@ void SerialWidget::initWidgets()
     comboDataBits = new QComboBox;
     comboStopBits = new QComboBox;
     comboFlowControl = new QComboBox;
-    comboTxt = new QComboBox;
 
     labelPortStatus = new QLabel(tr("关闭"));
     btnOpen = new QPushButton(tr("打开"));
@@ -76,7 +81,7 @@ void SerialWidget::initWidgets()
     btnSend = new QPushButton(tr("发送"));
     btnClearRecv = new QPushButton(tr("清空接收"));
     btnClearSend = new QPushButton(tr("清空发送"));
-    ckbAutoClear = new QCheckBox(tr("自动清空"));
+    ckbShowTime = new QCheckBox(tr("显示时间"));
     ckbAutoNewLine = new QCheckBox(tr("自动换行"));
     ckbShowSend = new QCheckBox(tr("显示发送"));
 
@@ -91,7 +96,7 @@ void SerialWidget::initWidgets()
     QGridLayout *layout2 = new QGridLayout;
     layout2->addWidget(asciiRcv,0,0);
     layout2->addWidget(hexRcv,0,1);
-    layout2->addWidget(ckbAutoClear,1,0,1,2);
+    layout2->addWidget(ckbShowTime,1,0,1,2);
     layout2->addWidget(ckbAutoNewLine,2,0,1,2);
     layout2->addWidget(ckbShowSend,3,0,1,2);
   //  layout2->addWidget(btnClearRecv,4,0,1,2);
@@ -130,12 +135,18 @@ void SerialWidget::initWidgets()
     txtSend = new QTextEdit;
 
     centerLayout->addWidget(txtRecv);
+
+    QVBoxLayout *layout5 = new QVBoxLayout;
+    layout5->addWidget(btnOpen);
+    layout5->addWidget(btnClearSend);
+
     QHBoxLayout *layout1 = new QHBoxLayout;
     layout1->addWidget(txtSend);
-    layout1->addWidget(btnOpen);
+    layout1->addLayout(layout5);
+
+
     //centerLayout->addWidget(txtSend);
     centerLayout->addLayout(layout1);
-    centerLayout->addWidget(comboTxt);
     centerLayout->setStretch(0,3);
     centerLayout->setStretch(1,1);
 
@@ -145,10 +156,29 @@ void SerialWidget::initWidgets()
     mainLayout->setStretch(1,3);
     centerWidget->setLayout(mainLayout);
     setCentralWidget(centerWidget);
-    statusBar = new QStatusBar(this);
-    setStatusBar(statusBar);
-    statusBar->showMessage(tr("COM2 CLOSED"));
 
+
+
+
+    comStatus = new QLabel(this);
+    comStatus->setMinimumWidth(this->width()/3);
+    comStatus->setStyleSheet(QString("QLabel{color:rgb(255, 0, 0);font: 13pt \"ADMUI3Lg\" bold;}"));
+    comStatus->setText(tr("CLOSED"));
+    recvStatus = new QLabel(this);
+    recvStatus->setMinimumWidth(this->width()/4);
+    recvStatus->setText(tr("Rx:0 Bytes"));
+    sendStatus = new QLabel(this);
+    sendStatus->setText(tr("Tx:0 Bytes"));
+    sendStatus->setMinimumWidth(this->width()/4);
+    placeHolderStatus = new QLabel(this);
+    placeHolderStatus->setText(tr(""));
+    placeHolderStatus->setMinimumWidth(this->width());
+
+
+    statusBar()->addWidget(comStatus);
+    statusBar()->addWidget(recvStatus);
+    statusBar()->addWidget(sendStatus);
+    statusBar()->addWidget(placeHolderStatus);
 
 
 }
@@ -223,7 +253,7 @@ void SerialWidget::initConnections()
         timer->setInterval(spinSendPeriod->value());
     });
     //定时器
-    connect(ckbShowSend, &QCheckBox::toggled, [this](bool checked) {
+    connect(ckbAutoSend, &QCheckBox::clicked, [this](bool checked) {
         if (checked)
             timer->start();
         else
@@ -231,6 +261,8 @@ void SerialWidget::initConnections()
     });
 
     connect(timer,&QTimer::timeout,this,&SerialWidget::sendData);
+
+
 }
 
 void SerialWidget::initMenu()
@@ -393,9 +425,18 @@ void SerialWidget::openPort()
                 startAction->setCheckable(true);
                 startAction->setChecked(true);
                 curPortStatus = true;
+                comStatus->setText(tr("%1 OPENED,%2,%3,%4,%5,%6").arg(portSet.portName)
+                                   .arg(portSet.baudRate)
+                                   .arg(portSet.dataBits)
+                                   .arg(portSet.parity)
+                                   .arg(portSet.stopBits)
+                                   .arg(portSet.flowControl));
+
+                comStatus->setStyleSheet(QString("QLabel{color:rgb(0, 128, 0);font: 12pt \"ADMUI3Lg\" bold;}"));
             }
             else{
-                QMessageBox::warning(this,tr("提示"),tr("串口打开失败!"),QMessageBox::Yes);
+                //QMessageBox::warning(this,tr("提示"),tr("串口打开失败!"),QMessageBox::Yes);
+                  comStatus->setText(tr("%1 打开失败").arg(portSet.portName));
             }
         }
     }
@@ -409,31 +450,49 @@ void SerialWidget::closePort()
      serial->close();
      curPortStatus = false;
      btnOpen->setText(tr("打开"));
-
+     comStatus->setText(tr("%1 CLOSED").arg(portSet.portName));
+     comStatus->setStyleSheet(QString("QLabel{color:rgb(255, 0, 0);font: 12pt \"ADMUI3Lg\" bold;}"));
 }
 
 void SerialWidget::readData()
 {
     const QByteArray data = serial->readAll();
 
-    if(txtRecv->blockCount()>20)
+    if(txtRecv->blockCount()>100)
     {
         txtRecv->clear();
     }
     //十六进制接收
     if(hexRcv->isChecked()){
         QString strData = data.toHex();
+//        if(ckbShowTime->isChecked())
+//        {
+//            txtRecv->insertPlainText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"));
+//            txtRecv->insertPlainText("  ");
+//        }
         for(int i=0;i<strData.length();i=i+2){
             txtRecv->insertPlainText(strData.mid(i,2));
             txtRecv->insertPlainText(tr(" "));
         }
+
         if(ckbAutoNewLine->isChecked()){        //换行
             txtRecv->insertPlainText(tr("\r\n"));
         }
     }
     else{
-        txtRecv->insertPlainText(data);
+//        if(ckbShowTime->isChecked())
+//        {
+//            txtRecv->insertPlainText(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss"));
+//            txtRecv->insertPlainText("  ");
+//            txtRecv->insertPlainText(data);
+//            txtRecv->insertPlainText(tr("\r\n"));
+//        }
+//        else
+            txtRecv->insertPlainText(data);
+
     }
+    recvSize += data.size();
+    recvStatus->setText(tr("Rx:%1 Bytes").arg(recvSize));
 
 }
 
@@ -441,24 +500,42 @@ void SerialWidget::readData()
 void SerialWidget::sendData()
 {
     if(!curPortStatus){
-        QMessageBox::warning(this,tr("提示"),tr("串口未打开，请先打开串口"),QMessageBox::Yes);
+        comStatus->setText(tr("串口未打开"));
+        comStatus->setStyleSheet(QString("QLabel{color:rgb(0, 255, 25);font: 12pt \"ADMUI3Lg\" bold;}"));
         return;
     }
+    int len = 0;
     QString data = this->txtSend->toPlainText();
 
     QByteArray arrData = data.toLatin1();
-    if(asciiSend->isChecked()){
-        serial->write(arrData);
+    len = arrData.size();
+
+    if(len > 0)//有数据时
+    {
+        if(asciiSend->isChecked()){
+            sendSize += len;
+            serial->write(arrData);
+            sendStatus->setText(tr("Tx:%1 Bytes").arg(sendSize));
+        }
+        else{
+            arrData = hexStringToByteArray(arrData);
+            serial->write(arrData);
+        }
+
+        if(ckbShowSend->isChecked())
+        {
+            this->txtRecv->appendPlainText(QString(arrData));
+        }
     }
-    else{
-        QByteArray temp = hexStringToByteArray(arrData);
-        serial->write(temp);
-    }
+
 }
 
 void SerialWidget::clearReadTxt()
 {
     this->txtRecv->clear();
+    sendSize = 0;
+    sendStatus->setText(tr("Tx:%1 Bytes").arg(sendSize));
+
 }
 
 void SerialWidget::clearSendTxt()
@@ -499,7 +576,7 @@ QByteArray SerialWidget::hexStringToByteArray(QString hexString)
     char lstr,hstr;
     for(int i=0; i<len; )
     {
-        hstr=hexString[i].toLatin1();   //字符型
+       hstr=hexString[i].toLatin1();
         if(hstr == ' ')
         {
             i++;
